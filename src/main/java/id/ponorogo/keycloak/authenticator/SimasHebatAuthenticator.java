@@ -63,6 +63,7 @@ public class SimasHebatAuthenticator implements Authenticator {
             in.close();
 
             String json = response.toString();
+            System.out.println("[SimasHebatAuthenticator] Response from SimasHebat API: " + json);
             // Simple JSON parsing (no external lib)
             if (json.contains("\"success\":true")) {
                 // Extract data fields manually (for production, use a JSON lib)
@@ -78,10 +79,15 @@ public class SimasHebatAuthenticator implements Authenticator {
                 String email = extractJsonValue(data, "email");
                 String pegawaiId = extractJsonValue(data, "pegawai_id");
 
+                System.out.println("[SimasHebatAuthenticator] nipBaru: " + nipBaru + ", nama: " + nama + ", email: " + email + ", pegawaiId: " + pegawaiId);
+
                 // Find or create user in Keycloak
                 UserModel user = context.getSession().users().getUserByUsername(context.getRealm(), nipBaru);
                 if (user == null) {
                     user = context.getSession().users().addUser(context.getRealm(), nipBaru);
+                    System.out.println("[SimasHebatAuthenticator] User baru dibuat di Keycloak: " + nipBaru);
+                } else {
+                    System.out.println("[SimasHebatAuthenticator] User sudah ada di Keycloak: " + nipBaru);
                 }
                 user.setEnabled(true);
                 if (nama != null && nama.contains(" ")) {
@@ -95,6 +101,7 @@ public class SimasHebatAuthenticator implements Authenticator {
                 if (pegawaiId != null) user.setSingleAttribute("pegawai_id", pegawaiId);
                 if (nipBaru != null) user.setSingleAttribute("nip_baru", nipBaru);
 
+                System.out.println("[SimasHebatAuthenticator] User sudah di-set di context dan akan success.");
                 context.setUser(user);
                 context.success();
             } else {
