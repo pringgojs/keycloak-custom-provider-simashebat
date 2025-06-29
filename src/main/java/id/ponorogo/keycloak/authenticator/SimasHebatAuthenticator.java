@@ -16,12 +16,13 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
-import java.util.Map;
+// import java.util.Map;
+import jakarta.ws.rs.core.MultivaluedMap;
 
 public class SimasHebatAuthenticator implements Authenticator {
     @Override
     public void authenticate(AuthenticationFlowContext context) {
-        Map<String, List<String>> formData = context.getHttpRequest().getDecodedFormParameters();
+        MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
         String username = formData.get("username") != null && !formData.get("username").isEmpty() ? formData.get("username").get(0) : null;
         String password = formData.get("password") != null && !formData.get("password").isEmpty() ? formData.get("password").get(0) : null;
 

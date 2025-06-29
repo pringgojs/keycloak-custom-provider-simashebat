@@ -35,7 +35,7 @@ public class SimasHebatAuthenticatorFactory implements ConfigurableAuthenticator
         return new SimasHebatAuthenticator();
     }
 
-    @Override public void init() {}
+    @Override public void init(org.keycloak.Config.Scope config) {}
     @Override public void postInit(KeycloakSessionFactory factory) {}
     @Override public void close() {}
     @Override public boolean isConfigurable() { return false; }
