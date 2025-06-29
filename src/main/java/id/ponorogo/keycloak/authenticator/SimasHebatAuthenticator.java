@@ -22,6 +22,7 @@ import jakarta.ws.rs.core.MultivaluedMap;
 public class SimasHebatAuthenticator implements Authenticator {
     @Override
     public void authenticate(AuthenticationFlowContext context) {
+        System.out.println("[SimasHebatAuthenticator]");
         MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
         String username = formData.get("username") != null && !formData.get("username").isEmpty() ? formData.get("username").get(0) : null;
         String password = formData.get("password") != null && !formData.get("password").isEmpty() ? formData.get("password").get(0) : null;
@@ -30,6 +31,8 @@ public class SimasHebatAuthenticator implements Authenticator {
             context.failure(AuthenticationFlowError.INVALID_USER);
             return;
         }
+
+        System.out.println("[SimasHebatAuthenticator] Response from SimasHebat API: " + username + ", password: " + password);
 
         try {
             // Hash password to MD5 before sending
