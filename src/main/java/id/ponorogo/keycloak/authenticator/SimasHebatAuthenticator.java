@@ -36,10 +36,10 @@ public class SimasHebatAuthenticator implements Authenticator {
 
         logger.infof("Username: %s, Password present: %s", username, password != null);
 
+        // Jika username/password belum diisi, tampilkan form bawaan Keycloak
         if (username == null || password == null) {
-            logger.warn("Username or password is null, failing authentication");
-
-            context.failure(AuthenticationFlowError.INVALID_USER);
+            logger.info("Menampilkan form login bawaan Keycloak");
+            context.challenge(context.form().createLoginUsernamePassword());
             return;
         }
 
