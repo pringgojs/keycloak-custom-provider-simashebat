@@ -18,25 +18,38 @@ import java.security.NoSuchAlgorithmException;
 import java.util.List;
 // import java.util.Map;
 import jakarta.ws.rs.core.MultivaluedMap;
+import org.jboss.logging.Logger;
+
 
 public class SimasHebatAuthenticator implements Authenticator {
+    private static final Logger logger = Logger.getLogger(SimasHebatAuthenticator.class);
+
     @Override
     public void authenticate(AuthenticationFlowContext context) {
-        System.out.println("[SimasHebatAuthenticator]");
+        logger.info("=== SimasHebatAuthenticator.authenticate() CALLED ===");
+
         MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
+        logger.infof("Form data keys: %s", formData.keySet());
+
         String username = formData.get("username") != null && !formData.get("username").isEmpty() ? formData.get("username").get(0) : null;
         String password = formData.get("password") != null && !formData.get("password").isEmpty() ? formData.get("password").get(0) : null;
 
+        logger.infof("Username: %s, Password present: %s", username, password != null);
+
         if (username == null || password == null) {
+            logger.warn("Username or password is null, failing authentication");
+
             context.failure(AuthenticationFlowError.INVALID_USER);
             return;
         }
 
-        System.out.println("[SimasHebatAuthenticator] Response from SimasHebat API: " + username + ", password: " + password);
+        logger.info("[SimasHebatAuthenticator] Response from SimasHebat API");
 
         try {
             // Hash password to MD5 before sending
             String md5Password = md5Hex(password);
+            logger.info("Password hashed to MD5");
+
             // Prepare request
             String url = "https://api-simashebat.ponorogo.go.id/";
             String urlParameters = "username=" + username + "&password=" + md5Password;
