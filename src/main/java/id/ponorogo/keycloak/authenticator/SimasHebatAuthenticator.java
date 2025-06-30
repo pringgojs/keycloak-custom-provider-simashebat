@@ -154,7 +154,12 @@ public class SimasHebatAuthenticator implements Authenticator {
         }
     }
 
-    @Override public void action(AuthenticationFlowContext context) {}
+    @Override
+    public void action(AuthenticationFlowContext context) {
+        // Tangani submit form login, lakukan proses yang sama seperti authenticate
+        authenticate(context);
+    }
+
     @Override public boolean requiresUser() { return false; }
     @Override public boolean configuredFor(KeycloakSession session, RealmModel realm, UserModel user) { return true; }
     @Override public void setRequiredActions(KeycloakSession session, RealmModel realm, UserModel user) {}
