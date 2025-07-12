@@ -28,6 +28,11 @@ public class SimasHebatAuthenticator implements Authenticator {
     public void authenticate(AuthenticationFlowContext context) {
         logger.info("=== SimasHebatAuthenticator.authenticate() CALLED ===");
 
+        // 🔍 Cek apakah ini silent login (prompt=none)
+        String prompt = context.getAuthenticationSession().getClientNote("prompt");
+        boolean isSilent = "none".equals(prompt);
+        
+        // 
         MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
         logger.infof("Form data keys: %s", formData.keySet());
 
@@ -36,6 +41,13 @@ public class SimasHebatAuthenticator implements Authenticator {
 
         logger.infof("Username: %s, Password present: %s", username, password != null);
 
+        // ✅ Jika silent login dan tidak ada form, langsung pass (anggap user sudah login)
+        if (isSilent && (username == null || password == null)) {
+            logger.info("Silent login detected, but no credentials submitted. Skipping authentication.");
+            context.attempted(); // atau context.success() jika user sudah diset dari sesi sebelumnya
+            return;
+        }
+        
         // Jika username/password belum diisi, tampilkan form bawaan Keycloak
         if (username == null || password == null) {
             logger.info("Menampilkan form login bawaan Keycloak");
