@@ -66,7 +66,10 @@ public class SimasHebatAuthenticator implements Authenticator {
 
             int responseCode = con.getResponseCode();
             if (responseCode != 200) {
-                context.failure(AuthenticationFlowError.INVALID_CREDENTIALS);
+                context.failureChallenge(AuthenticationFlowError.INVALID_CREDENTIALS,
+                context.form()
+                    .setError("invalid_credentials", "Invalid Credentials.")
+                    .createLoginUsernamePassword());
                 return;
             }
 
@@ -121,10 +124,17 @@ public class SimasHebatAuthenticator implements Authenticator {
                 context.setUser(user);
                 context.success();
             } else {
-                context.failure(AuthenticationFlowError.INVALID_USER);
+                context.failureChallenge(AuthenticationFlowError.INVALID_USER,
+                    context.form()
+                        .setError("invalidUserMessage")
+                        .createLoginUsernamePassword());
             }
         } catch (Exception e) {
-            context.failure(AuthenticationFlowError.INTERNAL_ERROR);
+            context.failureChallenge(AuthenticationFlowError.INTERNAL_ERROR,
+                context.form()
+                    .setError("errorMessage", "An error occurred while processing your request: " + e.getMessage())
+                    .createLoginUsernamePassword());
+                
         }
     }
 
