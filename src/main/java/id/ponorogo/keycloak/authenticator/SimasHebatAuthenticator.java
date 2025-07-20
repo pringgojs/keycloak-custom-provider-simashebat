@@ -27,6 +27,17 @@ public class SimasHebatAuthenticator implements Authenticator {
     @Override
     public void authenticate(AuthenticationFlowContext context) {
         logger.info("=== SimasHebatAuthenticator.authenticate() CALLED ===");
+        context.getHttpRequest().getHttpHeaders().getRequestHeaders().forEach((k, v) -> {
+            logger.infof("Header: %s = %s", k, v);
+        });
+
+
+        UserModel user1 = context.getUser();
+        UserModel user2 = context.getAuthenticationSession().getAuthenticatedUser();
+        UserModel user3 = context.getSession().getContext().getAuthenticationSession().getAuthenticatedUser();
+        logger.infof("User from context.getUser(): %s", user1 != null ? user1.getUsername() : "null");
+        logger.infof("User from context.getAuthenticationSession().getAuthenticatedUser(): %s", user2 != null ? user2.getUsername() : "null");
+        logger.infof("User from context.getSession().getContext().getAuthenticationSession().getAuthenticatedUser(): %s", user3 != null ? user3.getUsername() : "null");
 
         // 🔍 Cek apakah ini silent login (prompt=none)
         String prompt = context.getAuthenticationSession().getClientNote("prompt");
@@ -43,9 +54,19 @@ public class SimasHebatAuthenticator implements Authenticator {
 
         // ✅ Jika silent login dan tidak ada form, langsung pass (anggap user sudah login)
         if (isSilent && (username == null || password == null)) {
-            logger.info("Silent login detected, but no credentials submitted. Skipping authentication.");
-            context.attempted(); // atau context.success() jika user sudah diset dari sesi sebelumnya
-            return;
+            // Coba ambil user dari context dan dari authentication session
+            UserModel user = context.getUser();
+            if (user == null) {
+                user = context.getAuthenticationSession().getAuthenticatedUser();
+            }
+            logger.infof("Silent login detected. User from context: %s", user != null ? user.getUsername() : "null");
+            if (user != null) {
+                logger.infof("Silent login berhasil. User sudah login sebelumnya: %s", user.getUsername());
+                context.setUser(user); // pastikan user di-set ke context
+                context.success(); // sukses login tanpa form
+                return;
+            }
+            // jika tidak ada user berarti lanjut ke form login
         }
         
         // Jika username/password belum diisi, tampilkan form bawaan Keycloak
