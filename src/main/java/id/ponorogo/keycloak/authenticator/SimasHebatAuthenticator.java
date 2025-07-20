@@ -24,37 +24,15 @@ import org.jboss.logging.Logger;
 public class SimasHebatAuthenticator implements Authenticator {
     private static final Logger logger = Logger.getLogger(SimasHebatAuthenticator.class);
 
-    @Override
-    public void authenticate(AuthenticationFlowContext context) {
-        logger.info("=== SimasHebatAuthenticator.authenticate() CALLED ===");
-        context.getHttpRequest().getHttpHeaders().getRequestHeaders().forEach((k, v) -> {
-            logger.infof("Header: %s = %s", k, v);
-        });
-
-
-        UserModel user1 = context.getUser();
-        UserModel user2 = context.getAuthenticationSession().getAuthenticatedUser();
-        UserModel user3 = context.getSession().getContext().getAuthenticationSession().getAuthenticatedUser();
-        logger.infof("User from context.getUser(): %s", user1 != null ? user1.getUsername() : "null");
-        logger.infof("User from context.getAuthenticationSession().getAuthenticatedUser(): %s", user2 != null ? user2.getUsername() : "null");
-        logger.infof("User from context.getSession().getContext().getAuthenticationSession().getAuthenticatedUser(): %s", user3 != null ? user3.getUsername() : "null");
-
-        // 🔍 Cek apakah ini silent login (prompt=none)
+    private void handleSilentLogin(AuthenticationFlowContext context) {
         String prompt = context.getAuthenticationSession().getClientNote("prompt");
         boolean isSilent = "none".equals(prompt);
-        
-        // 
-        MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
-        logger.infof("Form data keys: %s", formData.keySet());
 
+        MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
         String username = formData.get("username") != null && !formData.get("username").isEmpty() ? formData.get("username").get(0) : null;
         String password = formData.get("password") != null && !formData.get("password").isEmpty() ? formData.get("password").get(0) : null;
 
-        logger.infof("Username: %s, Password present: %s", username, password != null);
-
-        // ✅ Jika silent login dan tidak ada form, langsung pass (anggap user sudah login)
         if (isSilent && (username == null || password == null)) {
-            // Coba ambil user dari context dan dari authentication session
             UserModel user = context.getUser();
             if (user == null) {
                 user = context.getAuthenticationSession().getAuthenticatedUser();
@@ -62,28 +40,26 @@ public class SimasHebatAuthenticator implements Authenticator {
             logger.infof("Silent login detected. User from context: %s", user != null ? user.getUsername() : "null");
             if (user != null) {
                 logger.infof("Silent login berhasil. User sudah login sebelumnya: %s", user.getUsername());
-                context.setUser(user); // pastikan user di-set ke context
-                context.success(); // sukses login tanpa form
+                context.setUser(user);
+                // Do not call context.success() here if you want the next flow (OTP) to execute.
+                // Instead, just return and let Keycloak proceed to the next authenticator.
                 return;
             }
-            // jika tidak ada user berarti lanjut ke form login
         }
-        
-        // Jika username/password belum diisi, tampilkan form bawaan Keycloak
+    }
+
+    private void showLoginFormIfNeeded(AuthenticationFlowContext context, String username, String password) {
         if (username == null || password == null) {
             logger.info("Menampilkan form login bawaan Keycloak");
             context.challenge(context.form().createLoginUsernamePassword());
-            return;
         }
+    }
 
-        logger.info("[SimasHebatAuthenticator] Response from SimasHebat API");
-
+    private void processSimasHebatLogin(AuthenticationFlowContext context, String username, String password) {
         try {
-            // Hash password to MD5 before sending
             String md5Password = md5Hex(password);
             logger.info("Password hashed to MD5");
 
-            // Prepare request
             String url = "https://api-simashebat.ponorogo.go.id/";
             String urlParameters = "username=" + username + "&password=" + md5Password;
             byte[] postData = urlParameters.getBytes(StandardCharsets.UTF_8);
@@ -100,9 +76,9 @@ public class SimasHebatAuthenticator implements Authenticator {
             int responseCode = con.getResponseCode();
             if (responseCode != 200) {
                 context.failureChallenge(AuthenticationFlowError.INVALID_CREDENTIALS,
-                context.form()
-                    .setError("invalid_credentials", "Invalid Credentials.")
-                    .createLoginUsernamePassword());
+                    context.form()
+                        .setError("invalid_credentials", "Invalid Credentials.")
+                        .createLoginUsernamePassword());
                 return;
             }
 
@@ -116,16 +92,13 @@ public class SimasHebatAuthenticator implements Authenticator {
 
             String json = response.toString();
             System.out.println("[SimasHebatAuthenticator] Response from SimasHebat API: " + json);
-            // Simple JSON parsing (no external lib)
+
             if (json.contains("\"success\":true")) {
-                // Extract data fields manually (for production, use a JSON lib)
                 String data = json.substring(json.indexOf("\"data\":") + 7);
-                // Only take the object part
                 if (data.startsWith("{")) {
                     int endIdx = data.indexOf("}") + 1;
                     data = data.substring(0, endIdx);
                 }
-                // Get some fields (nip_baru, nama, email, pegawai_id)
                 String nipBaru = extractJsonValue(data, "nip_baru");
                 String nama = extractJsonValue(data, "nama");
                 String email = extractJsonValue(data, "email");
@@ -133,7 +106,6 @@ public class SimasHebatAuthenticator implements Authenticator {
 
                 System.out.println("[SimasHebatAuthenticator] nipBaru: " + nipBaru + ", nama: " + nama + ", email: " + email + ", pegawaiId: " + pegawaiId);
 
-                // Find or create user in Keycloak
                 UserModel user = context.getSession().users().getUserByUsername(context.getRealm(), nipBaru);
                 if (user == null) {
                     user = context.getSession().users().addUser(context.getRealm(), nipBaru);
@@ -155,7 +127,9 @@ public class SimasHebatAuthenticator implements Authenticator {
 
                 System.out.println("[SimasHebatAuthenticator] User sudah di-set di context dan akan success.");
                 context.setUser(user);
-                context.success();
+
+                return;
+                // context.success();
             } else {
                 context.failureChallenge(AuthenticationFlowError.INVALID_USER,
                     context.form()
@@ -167,8 +141,56 @@ public class SimasHebatAuthenticator implements Authenticator {
                 context.form()
                     .setError("errorMessage", "An error occurred while processing your request: " + e.getMessage())
                     .createLoginUsernamePassword());
-                
         }
+    }
+
+    @Override
+    public void authenticate(AuthenticationFlowContext context) {
+        logger.info("=== SimasHebatAuthenticator.authenticate() CALLED ===");
+        context.getHttpRequest().getHttpHeaders().getRequestHeaders().forEach((k, v) -> {
+            logger.infof("Header: %s = %s", k, v);
+        });
+
+        UserModel user1 = context.getUser();
+        UserModel user2 = context.getAuthenticationSession().getAuthenticatedUser();
+        UserModel user3 = context.getSession().getContext().getAuthenticationSession().getAuthenticatedUser();
+        logger.infof("User from context.getUser(): %s", user1 != null ? user1.getUsername() : "null");
+        logger.infof("User from context.getAuthenticationSession().getAuthenticatedUser(): %s", user2 != null ? user2.getUsername() : "null");
+        logger.infof("User from context.getSession().getContext().getAuthenticationSession().getAuthenticatedUser(): %s", user3 != null ? user3.getUsername() : "null");
+
+        String prompt = context.getAuthenticationSession().getClientNote("prompt");
+        boolean isSilent = "none".equals(prompt);
+
+        MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
+        logger.infof("Form data keys: %s", formData.keySet());
+
+        String username = formData.get("username") != null && !formData.get("username").isEmpty() ? formData.get("username").get(0) : null;
+        String password = formData.get("password") != null && !formData.get("password").isEmpty() ? formData.get("password").get(0) : null;
+
+        logger.infof("Username: %s, Password present: %s", username, password != null);
+
+        if (isSilent && (username == null || password == null)) {
+            UserModel user = context.getUser();
+            if (user == null) {
+                user = context.getAuthenticationSession().getAuthenticatedUser();
+            }
+            logger.infof("Silent login detected. User from context: %s", user != null ? user.getUsername() : "null");
+            if (user != null) {
+                logger.infof("Silent login berhasil. User sudah login sebelumnya: %s", user.getUsername());
+                context.setUser(user);
+                // context.success();
+                return;
+            }
+        }
+
+        if (username == null || password == null) {
+            logger.info("Menampilkan form login bawaan Keycloak");
+            context.challenge(context.form().createLoginUsernamePassword());
+            return;
+        }
+
+        logger.info("[SimasHebatAuthenticator] Response from SimasHebat API");
+        processSimasHebatLogin(context, username, password);
     }
 
     // Helper method for simple JSON value extraction
