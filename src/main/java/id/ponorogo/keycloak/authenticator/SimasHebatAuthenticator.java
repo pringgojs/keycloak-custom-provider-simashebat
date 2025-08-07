@@ -58,24 +58,22 @@ public class SimasHebatAuthenticator implements Authenticator {
 
     private void processSimasHebatLogin(AuthenticationFlowContext context, String username, String password) {
         try {
-            String md5Password = md5Hex(password);
-            logger.info("Password hashed to MD5");
-
-            String url = "https://api-simashebat.ponorogo.go.id/";
-            String urlParameters = "username=" + username + "&password=" + md5Password;
-            byte[] postData = urlParameters.getBytes(StandardCharsets.UTF_8);
+            String url = "https://simashebat.ponorogo.go.id/api/v1/external/auth/";
+            String jsonBody = String.format("{\"app_id\":\"976c7127-4e15-43f5-8852-657b5c405972\",\"username\":\"%s\",\"password\":\"%s\"}", username, password);
 
             URL obj = new URL(url);
             HttpURLConnection con = (HttpURLConnection) obj.openConnection();
             con.setRequestMethod("POST");
-            con.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+            con.setRequestProperty("Accept", "application/json");
+            con.setRequestProperty("Content-Type", "application/json");
+            con.setRequestProperty("Authorization", "Bearer 2440efe5-d000-4089-bd5d-e57e547ca709");
             con.setDoOutput(true);
             try (DataOutputStream wr = new DataOutputStream(con.getOutputStream())) {
-                wr.write(postData);
+                wr.write(jsonBody.getBytes(StandardCharsets.UTF_8));
             }
 
             int responseCode = con.getResponseCode();
-            if (responseCode != 200) {
+            if (responseCode != 200 && responseCode != 201) {
                 context.failureChallenge(AuthenticationFlowError.INVALID_CREDENTIALS,
                     context.form()
                         .setError("invalid_credentials", "Invalid Credentials.")
@@ -94,42 +92,40 @@ public class SimasHebatAuthenticator implements Authenticator {
             String json = response.toString();
             System.out.println("[SimasHebatAuthenticator] Response from SimasHebat API: " + json);
 
-            if (json.contains("\"success\":true")) {
+            // Parse response: { "message": ..., "access": true, "data": { "nip": ..., "nama": ..., "email": ... } }
+            boolean access = json.contains("\"access\":true");
+            if (access && json.contains("\"data\":")) {
                 String data = json.substring(json.indexOf("\"data\":") + 7);
                 if (data.startsWith("{")) {
                     int endIdx = data.indexOf("}") + 1;
                     data = data.substring(0, endIdx);
                 }
-                String nipBaru = extractJsonValue(data, "nip_baru");
+                String nip = extractJsonValue(data, "nip");
                 String nama = extractJsonValue(data, "nama");
                 String email = extractJsonValue(data, "email");
-                String pegawaiId = extractJsonValue(data, "pegawai_id");
 
-                System.out.println("[SimasHebatAuthenticator] nipBaru: " + nipBaru + ", nama: " + nama + ", email: " + email + ", pegawaiId: " + pegawaiId);
+                System.out.println("[SimasHebatAuthenticator] nip: " + nip + ", nama: " + nama + ", email: " + email);
 
-                UserModel user = context.getSession().users().getUserByUsername(context.getRealm(), nipBaru);
+                UserModel user = context.getSession().users().getUserByUsername(context.getRealm(), nip);
                 if (user == null) {
-                    user = context.getSession().users().addUser(context.getRealm(), nipBaru);
-                    System.out.println("[SimasHebatAuthenticator] User baru dibuat di Keycloak: " + nipBaru);
+                    user = context.getSession().users().addUser(context.getRealm(), nip);
+                    System.out.println("[SimasHebatAuthenticator] User baru dibuat di Keycloak: " + nip);
                 } else {
-                    System.out.println("[SimasHebatAuthenticator] User sudah ada di Keycloak: " + nipBaru);
+                    System.out.println("[SimasHebatAuthenticator] User sudah ada di Keycloak: " + nip);
                 }
                 user.setEnabled(true);
                 if (nama != null && nama.contains(" ")) {
-                    String[] parts = nama.split(" ", 2);
+                    String[] parts = nama.trim().split(" ", 2);
                     user.setFirstName(parts[0]);
-                    user.setLastName(parts[1]);
+                    user.setLastName(parts.length > 1 ? parts[1] : "");
                 } else {
                     user.setFirstName(nama);
                 }
                 if (email != null) user.setEmail(email);
-                if (pegawaiId != null) user.setSingleAttribute("pegawai_id", pegawaiId);
-                if (nipBaru != null) user.setSingleAttribute("nip_baru", nipBaru);
+                if (nip != null) user.setSingleAttribute("nip", nip);
 
                 System.out.println("[SimasHebatAuthenticator] User sudah di-set di context dan akan success.");
                 context.setUser(user);
-
-                // return;
                 context.success();
             } else {
                 context.failureChallenge(AuthenticationFlowError.INVALID_USER,
@@ -205,20 +201,6 @@ public class SimasHebatAuthenticator implements Authenticator {
         return json.substring(start, end);
     }
 
-    // Helper method to hash string to MD5 hex
-    private static String md5Hex(String input) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            byte[] digest = md.digest(input.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            for (byte b : digest) {
-                sb.append(String.format("%02x", b & 0xff));
-            }
-            return sb.toString();
-        } catch (NoSuchAlgorithmException e) {
-            return null;
-        }
-    }
 
     @Override
     public void action(AuthenticationFlowContext context) {
