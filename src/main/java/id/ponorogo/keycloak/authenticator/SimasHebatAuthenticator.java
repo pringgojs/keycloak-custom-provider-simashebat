@@ -41,9 +41,10 @@ public class SimasHebatAuthenticator implements Authenticator {
             if (user != null) {
                 logger.infof("Silent login berhasil. User sudah login sebelumnya: %s", user.getUsername());
                 context.setUser(user);
+                context.success();
                 // Do not call context.success() here if you want the next flow (OTP) to execute.
                 // Instead, just return and let Keycloak proceed to the next authenticator.
-                return;
+                // return;
             }
         }
     }
@@ -128,8 +129,8 @@ public class SimasHebatAuthenticator implements Authenticator {
                 System.out.println("[SimasHebatAuthenticator] User sudah di-set di context dan akan success.");
                 context.setUser(user);
 
-                return;
-                // context.success();
+                // return;
+                context.success();
             } else {
                 context.failureChallenge(AuthenticationFlowError.INVALID_USER,
                     context.form()
@@ -178,7 +179,7 @@ public class SimasHebatAuthenticator implements Authenticator {
             if (user != null) {
                 logger.infof("Silent login berhasil. User sudah login sebelumnya: %s", user.getUsername());
                 context.setUser(user);
-                // context.success();
+                context.success();
                 return;
             }
         }
