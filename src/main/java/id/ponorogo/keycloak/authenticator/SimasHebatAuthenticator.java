@@ -24,7 +24,10 @@ import org.jboss.logging.Logger;
 public class SimasHebatAuthenticator implements Authenticator {
     private static final Logger logger = Logger.getLogger(SimasHebatAuthenticator.class);
 
-    private void handleSilentLogin(AuthenticationFlowContext context) {
+    /**
+     * Handle silent login. Return true jika silent login sukses, false jika tidak.
+     */
+    private boolean handleSilentLogin(AuthenticationFlowContext context) {
         String prompt = context.getAuthenticationSession().getClientNote("prompt");
         boolean isSilent = "none".equals(prompt);
 
@@ -42,11 +45,10 @@ public class SimasHebatAuthenticator implements Authenticator {
                 logger.infof("Silent login berhasil. User sudah login sebelumnya: %s", user.getUsername());
                 context.setUser(user);
                 context.success();
-                // Do not call context.success() here if you want the next flow (OTP) to execute.
-                // Instead, just return and let Keycloak proceed to the next authenticator.
-                // return;
+                return true;
             }
         }
+        return false;
     }
 
     private void showLoginFormIfNeeded(AuthenticationFlowContext context, String username, String password) {
@@ -148,6 +150,17 @@ public class SimasHebatAuthenticator implements Authenticator {
             logger.infof("Header: %s = %s", k, v);
         });
 
+        UserModel user = context.getUser();
+        if (user == null) {
+            user = context.getAuthenticationSession().getAuthenticatedUser();
+        }
+        if (user != null) {
+            logger.infof("User sudah ada di context, langsung success: %s", user.getUsername());
+            context.setUser(user);
+            context.success();
+            return;
+        }
+
         UserModel user1 = context.getUser();
         UserModel user2 = context.getAuthenticationSession().getAuthenticatedUser();
         UserModel user3 = context.getSession().getContext().getAuthenticationSession().getAuthenticatedUser();
@@ -155,8 +168,10 @@ public class SimasHebatAuthenticator implements Authenticator {
         logger.infof("User from context.getAuthenticationSession().getAuthenticatedUser(): %s", user2 != null ? user2.getUsername() : "null");
         logger.infof("User from context.getSession().getContext().getAuthenticationSession().getAuthenticatedUser(): %s", user3 != null ? user3.getUsername() : "null");
 
-        String prompt = context.getAuthenticationSession().getClientNote("prompt");
-        boolean isSilent = "none".equals(prompt);
+        // Sempurnakan silent login: jika sukses, langsung return
+        if (handleSilentLogin(context)) {
+            return;
+        }
 
         MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
         logger.infof("Form data keys: %s", formData.keySet());
@@ -165,20 +180,6 @@ public class SimasHebatAuthenticator implements Authenticator {
         String password = formData.get("password") != null && !formData.get("password").isEmpty() ? formData.get("password").get(0) : null;
 
         logger.infof("Username: %s, Password present: %s", username, password != null);
-
-        if (isSilent && (username == null || password == null)) {
-            UserModel user = context.getUser();
-            if (user == null) {
-                user = context.getAuthenticationSession().getAuthenticatedUser();
-            }
-            logger.infof("Silent login detected. User from context: %s", user != null ? user.getUsername() : "null");
-            if (user != null) {
-                logger.infof("Silent login berhasil. User sudah login sebelumnya: %s", user.getUsername());
-                context.setUser(user);
-                context.success();
-                return;
-            }
-        }
 
         if (username == null || password == null) {
             logger.info("Menampilkan form login bawaan Keycloak");
