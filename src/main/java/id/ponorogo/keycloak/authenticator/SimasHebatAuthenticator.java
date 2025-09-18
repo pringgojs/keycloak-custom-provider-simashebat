@@ -89,14 +89,19 @@ public class SimasHebatAuthenticator implements Authenticator {
     // Helper: check SimasHebat API availability (homepage)
     private boolean isSimasHebatApiAvailable() {
         try {
+            logger.info("url simas: " + SIMAS_API_CHECK_URL);
             URL url = new URL(SIMAS_API_CHECK_URL);
             HttpURLConnection con = (HttpURLConnection) url.openConnection();
             con.setRequestMethod("GET");
             con.setConnectTimeout(TIMEOUT);
             con.setReadTimeout(TIMEOUT);
             int responseCode = con.getResponseCode();
+            logger.info("Status cek koneksi ke SimasHebat: " + responseCode);
+
             return responseCode >= 200 && responseCode < 500;
         } catch (Exception e) {
+            logger.info("Error saat cek koneksi ke SimasHebat: " + e.getMessage());
+
             return false;
         }
     }
